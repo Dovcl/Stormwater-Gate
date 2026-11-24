@@ -273,6 +273,17 @@ const cfg = { tLow: 15, tHigh: 25, lvStop: 20, lvStart: 40, lvAlarm: 80, H: 125 
 
 let port = null, reader = null, writer = null, header = null, last = null;
 let rows = [], csvHeaderLine = '';
+let lastRx = 0, connectedAt = 0;
+const TIP_TEXT = document.getElementById('tip').textContent;
+// 연결됐는데 보드에서 아무것도 안 오면 알려 줌 (보드가 멈춘 경우 USB를 다시 꽂으면 풀림)
+setInterval(() => {
+  if (!port) return;
+  const quiet = Date.now() - Math.max(lastRx, connectedAt) > 5000;
+  $('connText').textContent = quiet ? '연결됨 · 데이터 없음' : '연결됨';
+  $('tip').hidden = !quiet;
+  $('tip').classList.toggle('err', quiet);
+  if (quiet) $('tip').textContent = '보드에서 5초 넘게 데이터가 안 와요. 연결 끊기 → USB를 뺐다 다시 꽂기 → 다시 연결해 보세요.';
+}, 1000);
 const hist = { turb: [], level: [] };
 const enc = new TextEncoder();
 
@@ -283,6 +294,7 @@ function setConnected(on) {
   $('connText').textContent = on ? '연결됨' : '연결 안 됨';
   $('connectBtn').textContent = on ? '연결 끊기' : '아두이노 연결';
   $('tip').hidden = on;
+  if (!on) { $('tip').textContent = TIP_TEXT; $('tip').classList.remove('err'); }
   document.querySelectorAll('#editPanel button, #editPanel input').forEach(el => {
     if (el.id !== 'degIn') el.disabled = !on;
   });
@@ -305,6 +317,7 @@ async function connect() {
   setConnected(true);
   addEvent('연결됨. 아두이노가 다시 켜지는 중...');
   header = null;
+  connectedAt = Date.now(); lastRx = 0;
   setTimeout(() => { send('csv'); setTimeout(() => send('p'), 300); }, 2200);
   readDone = readLoop();
 }
@@ -350,6 +363,7 @@ async function readLoop() {
 
 let lastCsvAsk = 0;
 function handleLine(line) {
+  lastRx = Date.now();
   if (!line) return;
   if (line.startsWith('ms,')) { header = line.split(','); csvHeaderLine = line; return; }
   if (line.startsWith('#')) {
