@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="575" viewBox="0 0 680 575" role="img">
+<title>차단판 제어부 배선도</title>
+<style>
+.th{font:500 14px sans-serif;fill:#2C2C2A}
+.ts{font:400 12px sans-serif;fill:#5F5E5A}
+.box{fill:#F8F8F6;stroke:#888780;stroke-width:0.8}
+</style>
+<rect x="0" y="0" width="680" height="575" fill="#FFFFFF"/>
+
+<rect x="260" y="120" width="160" height="300" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.8"/>
+<text class="th" x="340" y="140" text-anchor="middle" dominant-baseline="central">Arduino UNO R3</text>
+<text class="ts" x="272" y="170" dominant-baseline="central">5V</text>
+<text class="ts" x="272" y="200" dominant-baseline="central">GND</text>
+<text class="ts" x="272" y="230" dominant-baseline="central">A0</text>
+<text class="ts" x="408" y="170" text-anchor="end" dominant-baseline="central">D12</text>
+<text class="ts" x="408" y="200" text-anchor="end" dominant-baseline="central">D11</text>
+<text class="ts" x="408" y="335" text-anchor="end" dominant-baseline="central">D9</text>
+<text class="ts" x="340" y="405" text-anchor="middle" dominant-baseline="central">GND</text>
+
+<text class="th" x="105" y="126" text-anchor="middle" dominant-baseline="central">탁도 SEN0189</text>
+<rect class="box" x="40" y="140" width="130" height="110" rx="6"/>
+<text class="ts" x="160" y="170" text-anchor="end" dominant-baseline="central">VCC</text>
+<text class="ts" x="160" y="200" text-anchor="end" dominant-baseline="central">GND</text>
+<text class="ts" x="160" y="230" text-anchor="end" dominant-baseline="central">OUT</text>
+<text class="ts" x="105" y="266" text-anchor="middle" dominant-baseline="central">어댑터 스위치 A</text>
+
+<text class="th" x="580" y="111" text-anchor="middle" dominant-baseline="central">HC-SR04</text>
+<rect class="box" x="520" y="125" width="120" height="125" rx="6"/>
+<text class="ts" x="530" y="145" dominant-baseline="central">VCC</text>
+<text class="ts" x="530" y="170" dominant-baseline="central">Trig</text>
+<text class="ts" x="530" y="200" dominant-baseline="central">Echo</text>
+<text class="ts" x="630" y="230" text-anchor="end" dominant-baseline="central">GND</text>
+
+
+<rect x="480" y="320" width="160" height="80" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.8"/>
+<text class="th" x="575" y="350" text-anchor="middle" dominant-baseline="central">서보 FT5330M</text>
+<text class="ts" x="490" y="335" dominant-baseline="central">신호</text>
+<text class="ts" x="490" y="360" dominant-baseline="central">V+</text>
+<text class="ts" x="630" y="385" text-anchor="end" dominant-baseline="central">GND</text>
+
+<rect x="480" y="420" width="160" height="50" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.8"/>
+<text class="th" x="575" y="437" text-anchor="middle" dominant-baseline="central">AA 4구 배터리홀더</text>
+<text class="ts" x="575" y="455" text-anchor="middle" dominant-baseline="central">점퍼형 · AA 4개 ≈ 6V</text>
+
+<g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M170 170H260" stroke="#E24B4A"/>
+<path d="M215 170V95H495V145H520" stroke="#E24B4A"/>
+<path d="M170 200H260" stroke="#5F5E5A"/>
+<path d="M170 230H260" stroke="#1D9E75"/>
+<path d="M225 230V330" stroke="#1D9E75"/>
+<path d="M225 370V495" stroke="#5F5E5A"/>
+<path d="M420 170H520" stroke="#7F77DD"/>
+<path d="M420 200H520" stroke="#378ADD"/>
+<path d="M420 335H480" stroke="#D85A30"/>
+<path d="M480 445H465V360H480" stroke="#A32D2D"/>
+<path d="M640 230H655V495" stroke="#5F5E5A"/>
+<path d="M640 385H655" stroke="#5F5E5A"/>
+<path d="M640 455H655" stroke="#5F5E5A"/>
+<path d="M340 420V495" stroke="#5F5E5A"/>
+<path d="M225 495H655" stroke="#5F5E5A"/>
+</g>
+<rect class="box" x="218" y="330" width="14" height="40" rx="2"/>
+<text class="ts" x="210" y="350" text-anchor="end" dominant-baseline="central">100kΩ 풀다운</text>
+<g fill="#5F5E5A"><circle cx="215" cy="170" r="3" fill="#E24B4A"/><circle cx="225" cy="230" r="3" fill="#1D9E75"/><circle cx="655" cy="385" r="3"/><circle cx="655" cy="455" r="3"/><circle cx="340" cy="495" r="3"/><circle cx="225" cy="495" r="3"/><circle cx="655" cy="495" r="3"/></g>
+<text class="ts" x="440" y="512" text-anchor="middle" dominant-baseline="central">공통 GND (모든 GND를 한 점으로)</text>
+
+<g fill="none" stroke-width="2.5" stroke-linecap="round">
+<path d="M40 550H62" stroke="#E24B4A"/><path d="M175 550H197" stroke="#A32D2D"/><path d="M330 550H352" stroke="#5F5E5A"/><path d="M420 550H442" stroke="#1D9E75"/></g>
+<text class="ts" x="68" y="550" dominant-baseline="central">아두이노 5V</text>
+<text class="ts" x="203" y="550" dominant-baseline="central">서보 전원</text>
+<text class="ts" x="358" y="550" dominant-baseline="central">GND</text>
+<text class="ts" x="448" y="550" dominant-baseline="central">신호선 (색은 구분용)</text>
+</svg>

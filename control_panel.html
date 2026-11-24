@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>빗물받이 제어판</title>
+<style>
+:root {
+  --bg: #f6f5f1; --card: #ffffff; --line: #e2e0d8; --text: #1f1e1b; --muted: #6b6a64;
+  --accent: #2f6fb3; --accent-bg: #e6f0fb;
+  --fill: #6b6a64; --fill-bg: #efede7;
+  --measure: #2f6fb3; --measure-bg: #e6f0fb;
+  --treat: #b4541d; --treat-bg: #fbece3;
+  --bypass: #12775d; --bypass-bg: #e2f4ee;
+  --alarm: #b22b2b; --alarm-bg: #fbe8e8;
+  --manual: #5b4fbf; --manual-bg: #eeecfd;
+  --warn: #8a5a0a; --warn-bg: #fbf1dc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b19; --card: #252523; --line: #3a3936; --text: #ecebe6; --muted: #a3a19a;
+    --accent: #7fb1ea; --accent-bg: #1d3350;
+    --fill: #b9b7ae; --fill-bg: #33322f;
+    --measure: #7fb1ea; --measure-bg: #1d3350;
+    --treat: #f0a274; --treat-bg: #4a2a17;
+    --bypass: #6fd3b2; --bypass-bg: #123d32;
+    --alarm: #f29a9a; --alarm-bg: #4a1d1d;
+    --manual: #b3abf5; --manual-bg: #2f2a5a;
+    --warn: #f1c46b; --warn-bg: #4a3610;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; flex: 1; min-width: 160px; }
+h2 { font-size: 15px; margin: 0 0 10px; font-weight: 600; }
+button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { button.primary { color: #10223a; } }
+.conn { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #b4b2a9; }
+.dot.on { background: #2e9b6a; }
+.banner { padding: 10px 14px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-bottom: 14px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 760px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.label { font-size: 13px; color: var(--muted); }
+.big { font-size: 30px; font-weight: 600; line-height: 1.25; margin: 2px 0; }
+.sub { font-size: 13px; color: var(--muted); }
+.state-card { grid-column: span 2; }
+.state-card.s-FILL    { background: var(--fill-bg);    border-color: transparent; } .s-FILL .big    { color: var(--fill); }
+.state-card.s-MEASURE { background: var(--measure-bg); border-color: transparent; } .s-MEASURE .big { color: var(--measure); }
+.state-card.s-TREAT   { background: var(--treat-bg);   border-color: transparent; } .s-TREAT .big   { color: var(--treat); }
+.state-card.s-BYPASS  { background: var(--bypass-bg);  border-color: transparent; } .s-BYPASS .big  { color: var(--bypass); }
+.state-card.s-ALARM   { background: var(--alarm-bg);   border-color: transparent; } .s-ALARM .big   { color: var(--alarm); }
+.state-card.s-MANUAL  { background: var(--manual-bg);  border-color: transparent; } .s-MANUAL .big  { color: var(--manual); }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; min-height: 22px; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--warn-bg); color: var(--warn); }
+.next { margin-top: 8px; font-size: 13px; }
+.plate { display: flex; align-items: center; gap: 10px; }
+.plate svg { flex: none; }
+.meter { height: 8px; border-radius: 4px; background: var(--line); position: relative; margin-top: 10px; overflow: hidden; }
+.meter > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; width: 0; transition: width .3s; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 760px) { .row2 { grid-template-columns: 1fr; } }
+canvas { width: 100%; height: 150px; display: block; }
+.legend { font-size: 12px; color: var(--muted); }
+.edit-toggle { margin: 16px 0 0; width: 100%; padding: 12px; font-weight: 600; }
+#editPanel { margin-top: 12px; display: none; }
+#editPanel.open { display: grid; gap: 12px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns button.st { min-width: 92px; font-weight: 600; }
+button.st-FILL { color: var(--fill); } button.st-MEASURE { color: var(--measure); }
+button.st-TREAT { color: var(--treat); } button.st-BYPASS { color: var(--bypass); }
+.field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.field label { min-width: 70px; }
+input[type=number] { font: inherit; width: 96px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); }
+input[type=range] { flex: 1; min-width: 160px; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.chips button { padding: 5px 10px; font-size: 13px; }
+#events { font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace; max-height: 180px; overflow: auto;
+  background: var(--bg); border-radius: 8px; padding: 8px 10px; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); }
+.log-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.log-head h2 { margin: 0; flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>빗물받이 제어판</h1>
+    <span class="conn"><span class="dot" id="dot"></span><span id="connText">연결 안 됨</span></span>
+    <button class="primary" id="connectBtn">아두이노 연결</button>
+  </header>
+
+  <div class="banner" id="noSerial" hidden>
+    이 브라우저는 USB 연결(Web Serial)을 지원하지 않아요. <b>크롬</b>이나 <b>엣지</b>로 열어 주세요.
+  </div>
+  <div class="banner" id="tip">
+    연결 전에 Arduino IDE의 <b>시리얼 모니터를 닫아</b> 주세요. 열려 있으면 연결이 안 돼요.
+  </div>
+
+  <section class="grid">
+    <div class="card state-card s-FILL" id="stateCard">
+      <div class="label">지금 상태</div>
+      <div class="big" id="stateText">-</div>
+      <div class="sub" id="stateDesc">연결하면 1초마다 값이 갱신돼요</div>
+      <div class="badges" id="badges"></div>
+      <div class="next sub" id="nextText"></div>
+    </div>
+    <div class="card">
+      <div class="label">차단판</div>
+      <div class="plate">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true" id="plateIcon"></svg>
+        <div class="big" id="plateText">-</div>
+      </div>
+      <div class="sub" id="plateSub">서보 -°</div>
+    </div>
+    <div class="card">
+      <div class="label">판단 기억</div>
+      <div class="big" id="memText">-</div>
+      <div class="sub" id="reasonText">이유: -</div>
+    </div>
+    <div class="card" style="grid-column: span 2">
+      <div class="label">탁도 지수</div>
+      <div class="big" id="turbText">-</div>
+      <div class="sub" id="turbSub">-</div>
+      <div class="meter"><i id="turbBar"></i></div>
+    </div>
+    <div class="card" style="grid-column: span 2">
+      <div class="label">수위 (차단판 위)</div>
+      <div class="big" id="levelText">-</div>
+      <div class="sub" id="levelSub">-</div>
+      <div class="meter"><i id="levelBar"></i></div>
+    </div>
+  </section>
+
+  <section class="row2">
+    <div class="card">
+      <h2>탁도 기록 (최근 2분)</h2>
+      <canvas id="turbChart"></canvas>
+      <div class="legend">점선: 15% (맑음 기준), 25% (우회 중 처리 전환 기준)</div>
+    </div>
+    <div class="card">
+      <h2>수위 기록 (최근 2분)</h2>
+      <canvas id="levelChart"></canvas>
+      <div class="legend">점선: 20mm (측정 중단), 40mm (측정 시작), 80mm (비상 수위)</div>
+    </div>
+  </section>
+
+  <button class="edit-toggle" id="editToggle">값 고치기 ▾</button>
+  <section id="editPanel">
+    <div class="card">
+      <h2>1. 상태 직접 고르기</h2>
+      <div class="btns">
+        <button class="st st-FILL" data-cmd="fill">채움</button>
+        <button class="st st-MEASURE" data-cmd="measure">측정</button>
+        <button class="st st-TREAT" data-cmd="treat">처리 (판 열림)</button>
+        <button class="st st-BYPASS" data-cmd="bypass">우회 (판 닫힘)</button>
+        <button data-cmd="auto">자동으로 돌아가기</button>
+      </div>
+      <p class="hint">센서와 상관없이 고른 상태로 고정돼요. 서보가 바로 그 상태대로 움직여요. 판은 <b>처리</b>일 때만 열려요.</p>
+    </div>
+
+    <div class="card">
+      <h2>2. 센서 값 직접 넣기 (자동 판단 확인)</h2>
+      <div class="field">
+        <label for="turbIn">탁도 %</label>
+        <input type="number" id="turbIn" step="0.5" min="-50" max="100" value="30">
+        <button id="turbApply">적용</button>
+        <button id="turbOff">실제 센서로</button>
+        <span class="chips btns">
+          <button data-turb="5">맑은 물 5%</button>
+          <button data-turb="30">탁한 물 30%</button>
+        </span>
+      </div>
+      <div class="field">
+        <label for="levelIn">수위 mm</label>
+        <input type="number" id="levelIn" step="1" min="0" max="125" value="60">
+        <button id="levelApply">적용</button>
+        <button id="levelOff">실제 센서로</button>
+        <span class="chips btns">
+          <button data-level="10">빈 챔버 10</button>
+          <button data-level="60">물 찬 상태 60</button>
+        </span>
+      </div>
+      <p class="hint">넣은 값으로 아두이노가 실제처럼 판단해요. 예) 수위 60 + 탁도 30 → 약 6초 뒤 <b>처리</b>(판 열림),
+        이어서 탁도 5 → 5초 뒤 <b>우회</b>(판 닫힘). 시험 상태(1번)였다면 자동으로 풀려요.</p>
+    </div>
+
+    <div class="card">
+      <h2>3. 서보 각도 찾기</h2>
+      <div class="field">
+        <button id="manualBtn">수동 모드 시작</button>
+        <input type="range" id="degIn" min="0" max="180" value="90" disabled>
+        <b id="degVal">90°</b>
+      </div>
+      <p class="hint" id="servoHint">수동 모드에서 슬라이더를 움직이면 서보가 그 각도로 가요. 구멍이 완전히 막히는 각도와 겹치는 각도를 찾아서
+        코드의 SERVO_CLOSED_DEG / SERVO_OPEN_DEG에 넣어요.</p>
+    </div>
+
+    <div class="card">
+      <h2>4. 맑은 물 보정</h2>
+      <button id="calBtn">맑은 물 기준 저장 (5초)</button>
+      <p class="hint">탁도센서를 <b>맑은 물에 담근 상태</b>에서 누르세요. 5초 동안 재서 아두이노에 저장해요.</p>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <div class="log-head">
+      <h2>기록</h2>
+      <span class="sub" id="rowCount">0줄</span>
+      <button id="saveCsv">CSV로 저장</button>
+      <button id="clearLog">지우기</button>
+    </div>
+    <div id="events"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const ST = {
+  FILL:    ['채움', '물이 차기를 기다리는 중 · 판 닫힘'],
+  MEASURE: ['측정', '물이 찼어요 · 탁도를 판단하는 중'],
+  TREAT:   ['처리', '탁한 물 → 판 열고 아래 필터로'],
+  BYPASS:  ['우회', '맑은 물 → 판 닫고 옆으로 넘김'],
+  ALARM:   ['경보', '비상 · 판 닫힘'],
+  MANUAL:  ['수동', '서보 각도를 직접 움직이는 중'],
+};
+const MEM = { NONE: '없음', TREAT: '처리', BYPASS: '우회' };
+const REASON = {
+  BOOT: '전원 켜짐', LEVEL_UP: '수위 40mm 이상', LEVEL_LOW: '수위 20mm 미만', TURB_HIGH: '탁도 높음',
+  TURB_LOW: '탁도 낮음', RESUME: '직전이 우회라 우회로 복귀', TEST: '직접 고름', TEST_EXIT: '자동으로 돌아감',
+  NO_LEVEL: '수위값 없음', SIM: '입력값 사용 시작', CAL: '보정 끝', MANUAL: '수동 모드', MANUAL_EXIT: '수동 모드 끝',
+  RESET: '경보 해제', HIGH_WATER: '비상 수위', LEVEL_SENSOR: '수위센서 이상',
+};
+const cfg = { tLow: 15, tHigh: 25, lvStop: 20, lvStart: 40, lvAlarm: 80, H: 125 };
+
+let port = null, reader = null, writer = null, header = null, last = null;
+let rows = [], csvHeaderLine = '';
+const hist = { turb: [], level: [] };
+const enc = new TextEncoder();
+
+if (!('serial' in navigator)) { $('noSerial').hidden = false; $('connectBtn').disabled = true; }
+
+function setConnected(on) {
+  $('dot').classList.toggle('on', on);
+  $('connText').textContent = on ? '연결됨' : '연결 안 됨';
+  $('connectBtn').textContent = on ? '연결 끊기' : '아두이노 연결';
+  $('tip').hidden = on;
+  document.querySelectorAll('#editPanel button, #editPanel input').forEach(el => {
+    if (el.id !== 'degIn') el.disabled = !on;
+  });
+  if (!on) $('degIn').disabled = true;
+}
+setConnected(false);
+
+async function send(cmd) {
+  if (!writer) return;
+  await writer.write(enc.encode(cmd + '\n'));
+  addEvent('> ' + cmd);
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+  } catch (e) { addEvent('연결 실패: ' + e.message); port = null; return; }
+  writer = port.writable.getWriter();
+  setConnected(true);
+  addEvent('연결됨. 아두이노가 다시 켜지는 중...');
+  header = null;
+  setTimeout(() => { send('csv'); setTimeout(() => send('p'), 300); }, 2200);
+  readDone = readLoop();
+}
+
+let readDone = null, closing = false;
+async function disconnect() {
+  if (!port || closing) return;
+  closing = true;
+  const p = port;
+  try { if (reader) await reader.cancel(); } catch (e) {}
+  try { await readDone; } catch (e) {}
+  try { if (writer) writer.releaseLock(); } catch (e) {}
+  try { await p.close(); } catch (e) {}
+  port = reader = writer = null;
+  closing = false;
+  setConnected(false);
+  addEvent('연결 끊김');
+}
+
+async function readLoop() {
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    reader = port.readable.getReader();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        handleLine(buf.slice(0, i).replace(/\r$/, ''));
+        buf = buf.slice(i + 1);
+      }
+    }
+  } catch (e) {
+    addEvent('읽기 중단: ' + e.message);
+  } finally {
+    try { reader && reader.releaseLock(); } catch (e) {}
+    reader = null;
+    if (port && !closing) setTimeout(disconnect, 0);   // USB가 뽑히는 등 스스로 끊긴 경우
+  }
+}
+
+let lastCsvAsk = 0;
+function handleLine(line) {
+  if (!line) return;
+  if (line.startsWith('ms,')) { header = line.split(','); csvHeaderLine = line; return; }
+  if (line.startsWith('#')) {
+    parseConfig(line);
+    if (line.includes('stormwater gate controller')) setTimeout(() => send('csv'), 300);
+    if (!line.startsWith('# ----') && !line.startsWith('# cmds') && !line.startsWith('#       ') &&
+        !line.startsWith('# test') && !line.startsWith('# log') && !line.startsWith('# sim')) addEvent(line.slice(2));
+    return;
+  }
+  if (line.startsWith('[')) {          // 읽기 쉬운 로그가 오면 CSV로 바꿔 달라고 요청
+    if (Date.now() - lastCsvAsk > 3000) { lastCsvAsk = Date.now(); send('csv'); }
+    return;
+  }
+  if (header && /^\d+,/.test(line)) {
+    const v = line.split(',');
+    if (v.length < header.length - 1) return;
+    const r = {};
+    header.forEach((h, k) => r[h] = v[k]);
+    rows.push(line);
+    if (rows.length > 50000) rows.shift();
+    $('rowCount').textContent = rows.length + '줄';
+    update(r);
+  }
+}
+
+function parseConfig(line) {
+  let m;
+  if ((m = line.match(/turb low\/high=([\d.]+)\/([\d.]+)/))) { cfg.tLow = +m[1]; cfg.tHigh = +m[2]; }
+  if ((m = line.match(/level stop\/start\/alarm\/reset=(\d+)\/(\d+)\/(\d+)/))) {
+    cfg.lvStop = +m[1]; cfg.lvStart = +m[2]; cfg.lvAlarm = +m[3];
+  }
+  if ((m = line.match(/H_MM=(\d+)/))) cfg.H = +m[1];
+  if ((m = line.match(/servo closed\/open=(\d+)\/(\d+)/))) {
+    $('servoHint').firstChild.textContent = `지금 코드 값: 닫힘 ${m[1]}°, 열림 ${m[2]}°. ` +
+      '수동 모드에서 슬라이더를 움직이면 서보가 그 각도로 가요. 구멍이 완전히 막히는 각도와 겹치는 각도를 찾아서 코드의 SERVO_CLOSED_DEG / SERVO_OPEN_DEG에 넣어요.';
+  }
+}
+
+function update(r) {
+  last = r;
+  const st = ST[r.state] ? r.state : 'FILL';
+  $('stateCard').className = 'card state-card s-' + st;
+  $('stateText').textContent = ST[st][0];
+  $('stateDesc').textContent = ST[st][1];
+
+  const badges = [];
+  if (r.test === '1') badges.push('직접 고른 상태 (센서 무시)');
+  if (r.sim && r.sim !== '-') {
+    const parts = [];
+    if (r.sim.includes('T')) parts.push('탁도');
+    if (r.sim.includes('L')) parts.push('수위');
+    badges.push(parts.join('·') + ' 입력값 사용 중');
+  }
+  if (r.warn && r.warn.includes('CAL_DEFAULT')) badges.push('맑은 물 보정 안 함');
+  if (r.warn && r.warn.includes('ADC_ZERO')) badges.push('탁도센서 0 (선 확인)');
+  $('badges').innerHTML = badges.map(b => `<span class="badge">${b}</span>`).join('');
+
+  const open = r.open === '1';
+  $('plateText').textContent = open ? '열림' : '닫힘';
+  $('plateSub').textContent = `서보 ${r.servo_deg ?? '-'}°`;
+  drawPlate(open);
+
+  $('memText').textContent = MEM[r.mem] || r.mem;
+  $('reasonText').textContent = '이유: ' + (REASON[r.reason] || r.reason);
+
+  const turbNA = r.turb_index === 'NA';
+  const t = parseFloat(r.turb_index);
+  $('turbText').textContent = turbNA ? '모으는 중' : t.toFixed(1) + '%';
+  $('turbText').style.color = (!turbNA && t > cfg.tLow) ? 'var(--treat)' : '';
+  $('turbSub').textContent = (r.sim || '').includes('T') ? '입력값' :
+    `센서 ADC ${Math.round(parseFloat(r.avg_adc))} · ${(!turbNA && t > cfg.tLow) ? '탁함 쪽' : '맑음 쪽'} (기준 ${cfg.tLow}%)`;
+  $('turbBar').style.width = turbNA ? '0' : Math.max(0, Math.min(100, t)) + '%';
+  $('turbBar').style.background = (!turbNA && t > cfg.tLow) ? 'var(--treat)' : 'var(--bypass)';
+
+  const lvNA = r.level_mm === 'NA';
+  const lv = parseInt(r.level_mm, 10);
+  const dist = parseInt(r.dist_mm, 10);
+  $('levelText').textContent = lvNA ? '측정불가' : lv + ' mm';
+  $('levelSub').textContent = (r.sim || '').includes('L') ? '입력값' :
+    (dist < 0 ? '초음파 센서 응답 없음' : `센서까지 거리 ${dist} mm`);
+  $('levelBar').style.width = lvNA ? '0' : Math.max(0, Math.min(100, lv / cfg.H * 100)) + '%';
+  $('levelBar').style.background = (!lvNA && lv >= cfg.lvAlarm) ? 'var(--alarm)' : 'var(--accent)';
+
+  $('nextText').textContent = nextHint(st, r.test === '1', lvNA ? null : lv);
+
+  const isManual = st === 'MANUAL';
+  $('manualBtn').textContent = isManual ? '수동 모드 끝내기' : '수동 모드 시작';
+  $('degIn').disabled = !isManual || !writer;
+  if (!isManual && document.activeElement !== $('degIn')) {
+    $('degIn').value = r.servo_deg; $('degVal').textContent = r.servo_deg + '°';
+  }
+
+  push(hist.turb, turbNA ? null : t);
+  push(hist.level, lvNA ? null : lv);
+  drawCharts();
+}
+
+function nextHint(st, test, lv) {
+  if (test) return '다음: "자동으로 돌아가기"를 누르기 전까지 이 상태 그대로예요.';
+  switch (st) {
+    case 'FILL':    return lv === null ? '다음: 수위값이 들어오면 판단을 시작해요.'
+                                       : `다음: 수위 ${cfg.lvStart}mm 이상이 1초 유지되면 측정으로 가요.`;
+    case 'MEASURE': return `다음: 3초 안정화 후 탁도 ${cfg.tLow}% 초과 2초 → 처리, ${cfg.tLow}% 이하 5초 → 우회 (직전이 우회면 바로 우회)`;
+    case 'TREAT':   return `다음: 탁도 ${cfg.tLow}% 이하가 5초 유지되면 우회. 수위 ${cfg.lvStop}mm 미만이면 채움.`;
+    case 'BYPASS':  return `다음: 탁도 ${cfg.tHigh}% 이상이 2초 유지되면 처리. 수위 ${cfg.lvStop}mm 미만이면 채움.`;
+    case 'MANUAL':  return '다음: 슬라이더로 각도를 움직여 보세요.';
+    default:        return '';
+  }
+}
+
+function push(a, v) { a.push(v); if (a.length > 120) a.shift(); }
+
+function drawPlate(open) {
+  const c = open ? 'var(--treat)' : 'var(--bypass)';
+  $('plateIcon').innerHTML = open
+    ? `<rect x="4" y="16" width="14" height="6" rx="2" fill="${c}"/><rect x="22" y="16" width="14" height="6" rx="2" fill="${c}"/>
+       <path d="M20 24v10M16 30l4 4 4-4" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"/>`
+    : `<rect x="4" y="16" width="32" height="6" rx="2" fill="${c}"/>
+       <path d="M8 10h22M26 6l4 4-4 4" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+}
+
+function drawChart(canvas, data, max, lines, color) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext('2d');
+  g.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement);
+  const muted = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim();
+  const L = 34, R = 6, T = 6, B = 16;
+  const x = i => L + (w - L - R) * i / 119, y = v => T + (h - T - B) * (1 - Math.max(0, Math.min(max, v)) / max);
+  g.font = '11px sans-serif'; g.fillStyle = muted; g.textAlign = 'right'; g.textBaseline = 'middle';
+  g.strokeStyle = line; g.lineWidth = 1;
+  [0, max].forEach(v => { g.fillText(v, L - 6, y(v)); });
+  g.beginPath(); g.moveTo(L, y(0)); g.lineTo(w - R, y(0)); g.stroke();
+  g.setLineDash([4, 4]); g.strokeStyle = muted;
+  lines.forEach(v => { g.beginPath(); g.moveTo(L, y(v)); g.lineTo(w - R, y(v)); g.stroke(); g.fillText(v, L - 6, y(v)); });
+  g.setLineDash([]);
+  g.textAlign = 'left'; g.fillText('2분 전', L, h - 6); g.textAlign = 'right'; g.fillText('지금', w - R, h - 6);
+  g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = 'round';
+  const off = 120 - data.length;
+  g.beginPath(); let pen = false;
+  data.forEach((v, i) => {
+    if (v === null) { pen = false; return; }
+    pen ? g.lineTo(x(i + off), y(v)) : g.moveTo(x(i + off), y(v)); pen = true;
+  });
+  g.stroke();
+}
+
+function drawCharts() {
+  const css = getComputedStyle(document.documentElement);
+  drawChart($('turbChart'), hist.turb, 100, [cfg.tLow, cfg.tHigh], css.getPropertyValue('--treat').trim());
+  drawChart($('levelChart'), hist.level, cfg.H, [cfg.lvStop, cfg.lvStart, cfg.lvAlarm], css.getPropertyValue('--accent').trim());
+}
+window.addEventListener('resize', drawCharts);
+drawCharts(); drawPlate(false);
+
+function addEvent(text) {
+  const el = $('events');
+  const t = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  el.textContent += `[${t}] ${text}\n`;
+  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---- 버튼 ----
+$('connectBtn').onclick = () => port ? disconnect() : connect();
+$('editToggle').onclick = () => {
+  const open = $('editPanel').classList.toggle('open');
+  $('editToggle').textContent = open ? '값 고치기 ▴' : '값 고치기 ▾';
+};
+document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => send(b.dataset.cmd));
+function applyTurb(v) {
+  if (v === '' || isNaN(+v)) { addEvent('탁도 값을 숫자로 넣어 주세요'); return; }
+  $('turbIn').value = v; send('t' + (+v));
+}
+function applyLevel(v) {
+  if (v === '' || isNaN(+v)) { addEvent('수위 값을 숫자로 넣어 주세요'); return; }
+  $('levelIn').value = v; send('h' + Math.round(+v));
+}
+$('turbApply').onclick = () => applyTurb($('turbIn').value);
+$('levelApply').onclick = () => applyLevel($('levelIn').value);
+$('turbIn').onkeydown = e => { if (e.key === 'Enter') applyTurb($('turbIn').value); };
+$('levelIn').onkeydown = e => { if (e.key === 'Enter') applyLevel($('levelIn').value); };
+$('turbOff').onclick = () => send('toff');
+$('levelOff').onclick = () => send('hoff');
+document.querySelectorAll('[data-turb]').forEach(b => b.onclick = () => applyTurb(b.dataset.turb));
+document.querySelectorAll('[data-level]').forEach(b => b.onclick = () => applyLevel(b.dataset.level));
+$('manualBtn').onclick = () => send('m');
+$('degIn').oninput = () => { $('degVal').textContent = $('degIn').value + '°'; };
+$('degIn').onchange = () => send('s' + $('degIn').value);
+$('calBtn').onclick = () => {
+  if (confirm('탁도센서가 맑은 물에 담겨 있나요? 5초 동안 재서 기준값으로 저장해요.')) send('c');
+};
+$('saveCsv').onclick = () => {
+  if (!rows.length) { addEvent('저장할 기록이 없어요'); return; }
+  const blob = new Blob(['﻿' + csvHeaderLine + '\n' + rows.join('\n') + '\n'], { type: 'text/csv' });
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `stormwater_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('clearLog').onclick = () => {
+  if (!confirm('화면의 기록과 저장 대기 중인 CSV 데이터를 지울까요?')) return;
+  rows = []; hist.turb = []; hist.level = [];
+  $('events').textContent = ''; $('rowCount').textContent = '0줄'; drawCharts();
+};
+</script>
+</body>
+</html>
