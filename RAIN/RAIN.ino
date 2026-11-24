@@ -84,8 +84,8 @@ const unsigned long EVENT_GAP_MS = 10UL * 60UL * 1000UL;  // 10분 (시험 시 �
 // --- 서보 ---
 // 조립 후 구멍이 어긋나는 각도/겹치는 각도를 찾아 바꾼다 ('M' 수동 모드 사용).
 // 기구의 끝 멈춤에 닿지 않는 각도로 잡아야 서보가 버티며 과열되지 않는다.
-const int SERVO_CLOSED_DEG = 90;
-const int SERVO_OPEN_DEG   = 110;
+const int SERVO_CLOSED_DEG = 45;
+const int SERVO_OPEN_DEG   = 135;
 const unsigned long SERVO_STEP_MS    = 15;    // 1°씩 움직이는 간격 (충격 완화)
 const unsigned long SERVO_MIN_GAP_MS = 3000;  // 열기 동작 최소 간격 (반복 개폐 보호)
 

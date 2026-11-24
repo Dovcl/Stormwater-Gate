@@ -3,7 +3,7 @@
 초기우수 선택 처리 빗물받이(1조)의 **측정챔버 → 2중 타공 차단판** 제어 코드입니다.
 탁도를 재서 탁하면 판을 열어 하부 필터로 보내고(처리), 맑으면 닫아 두어 측면 월류로 빠지게 합니다(우회).
 
-- 코드: [`stormwater_controller/stormwater_controller.ino`](stormwater_controller/stormwater_controller.ino)
+- 코드: [`RAIN/RAIN.ino`](RAIN/RAIN.ino)
 - 상태: UNO용 컴파일 확인 완료 (플래시 44%, RAM 27%). **실제 부품 연결 시험은 아직 안 함.**
 - 현재 버전은 **가지고 있는 부품으로 동작을 구현·확인하기 위한 벤치 시험용**입니다.
   수위센서(HC-SR04) 설치 방법과 물방울 대책은 [추가 검토 필요 A](#추가-검토-필요) 참고.
@@ -212,8 +212,8 @@
 기본은 **한글로 읽기 쉬운 로그**입니다.
 
 ```
-[  20초] 채움(시험) | 판: 닫힘 (90°) | 탁도 -2.6% (ADC 882) | 수위 측정불가 (센서 응답 없음) | 기억: 없음 | 이유: TEST | 주의: 맑은물 보정 안 함(C)
-[  31초] 처리(시험) | 판: 열림 (110°) | 탁도 32.5% (ADC 580) | 수위 45mm (거리 80mm) | 기억: 처리 | 이유: TEST
+[  20초] 채움(시험) | 판: 닫힘 (45°) | 탁도 -2.6% (ADC 882) | 수위 측정불가 (센서 응답 없음) | 기억: 없음 | 이유: TEST | 주의: 맑은물 보정 안 함(C)
+[  31초] 처리(시험) | 판: 열림 (135°) | 탁도 32.5% (ADC 580) | 수위 45mm (거리 80mm) | 기억: 처리 | 이유: TEST
 ```
 
 - 판 각도는 서보에 보내는 명령 각도입니다. 실제 판 위치를 잰 값은 아닙니다.
@@ -221,7 +221,7 @@
 
 ```
 ms,state,test,mem,raw_adc,avg_adc,turb_index,dist_mm,level_mm,open,servo_deg,reason,sim,warn
-12000,TREAT,0,TREAT,605,607.3,29.4,59,66,1,110,TURB_HIGH,-,-
+12000,TREAT,0,TREAT,605,607.3,29.4,59,66,1,135,TURB_HIGH,-,-
 ```
 
 | 칸 | 뜻 |
@@ -263,8 +263,8 @@ ms,state,test,mem,raw_adc,avg_adc,turb_index,dist_mm,level_mm,open,servo_deg,rea
 |---|---|---|
 | `채움` / `fill` | 물 채우는 중 | 닫힘 |
 | `측정` / `measure` | 수위 확보, 탁도 판단 중 | 닫힘 |
-| `처리` / `treat` | 탁함 → 하부 필터로 처리 | **열림** (110°) |
-| `우회` / `bypass` | 맑음 → 측면 월류 | 닫힘 (90°) |
+| `처리` / `treat` | 탁함 → 하부 필터로 처리 | **열림** (135°) |
+| `우회` / `bypass` | 맑음 → 측면 월류 | 닫힘 (45°) |
 | `경보` / `alarm` | 비상 | 닫힘 |
 
 - 예: `처리` → 판이 천천히 열림 → `우회` → 바로 닫힘.
@@ -341,7 +341,7 @@ ms,state,test,mem,raw_adc,avg_adc,turb_index,dist_mm,level_mm,open,servo_deg,rea
 | `T_LOW` / `T_HIGH` | 15 / 25 % | 탁도 지수 임계값 |
 | `HOLD_TREAT_MS` / `HOLD_BYPASS_MS` | 2000 / 5000 | 처리 / 우회 전환 유지 시간 |
 | `EVENT_GAP_MS` | 10분 | 새 강우로 보는 건조 시간 |
-| `SERVO_CLOSED_DEG` / `SERVO_OPEN_DEG` | 90 / 110 | 조립 후 보정 |
+| `SERVO_CLOSED_DEG` / `SERVO_OPEN_DEG` | 45 / 135 | 조립 후 보정 |
 | `SERVO_MIN_GAP_MS` | 3000 | 열기 동작 최소 간격 |
 
 ---
