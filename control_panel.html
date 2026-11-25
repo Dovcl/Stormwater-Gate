@@ -61,15 +61,18 @@ button.danger { color: var(--danger); }
 .num { font-size: 30px; font-weight: 650; line-height: 1.2; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
-.overview { grid-template-columns: 1.4fr 1fr 1fr; grid-template-areas: "state plate mem" "state turb level"; }
+.overview { grid-template-columns: 1.4fr 1fr 1fr 1fr; grid-template-areas: "state plate plate mem" "state turb ntu level"; }
 .overview > :nth-child(1) { grid-area: state; } .overview > :nth-child(2) { grid-area: plate; }
 .overview > :nth-child(3) { grid-area: mem; } .overview > :nth-child(4) { grid-area: turb; }
-.overview > :nth-child(5) { grid-area: level; }
+.overview > :nth-child(5) { grid-area: ntu; } .overview > :nth-child(6) { grid-area: level; }
+@media (max-width: 960px) {
+  .overview { grid-template-columns: 1.4fr 1fr 1fr; grid-template-areas: "state plate mem" "state turb ntu" "state level level"; }
+}
 @media (max-width: 760px) {
-  .overview { grid-template-columns: 1fr 1fr; grid-template-areas: "state state" "plate mem" "turb level"; }
+  .overview { grid-template-columns: 1fr 1fr; grid-template-areas: "state state" "plate mem" "turb ntu" "level level"; }
 }
 @media (max-width: 420px) {
-  .overview { grid-template-columns: 1fr; grid-template-areas: "state" "plate" "mem" "turb" "level"; }
+  .overview { grid-template-columns: 1fr; grid-template-areas: "state" "plate" "mem" "turb" "ntu" "level"; }
 }
 .state-cell { display: flex; flex-direction: column; padding: 22px 24px; }
 .state-word { font-size: 52px; font-weight: 700; line-height: 1.05; letter-spacing: -0.03em; margin: 6px 0 6px; }
@@ -160,6 +163,12 @@ input[type=range] { flex: 1; min-width: 90px; accent-color: var(--text); }
       <div class="num" id="turbText">-</div>
       <div class="sub" id="turbSub">-</div>
       <div class="meter"><i id="turbBar"></i></div>
+    </div>
+    <div class="cell">
+      <div class="label">탁도 (NTU 환산)</div>
+      <div class="num" id="ntuText">-</div>
+      <div class="sub" id="ntuSub">맑은 물 = 1 NTU 기준 · 참고값</div>
+      <div class="meter"><i id="ntuBar"></i></div>
     </div>
     <div class="cell">
       <div class="label">수위 (차단판 위)</div>
@@ -440,6 +449,19 @@ function update(r) {
     `센서 ADC ${Math.round(parseFloat(r.avg_adc))} · ${(!turbNA && t > cfg.tLow) ? '탁함 쪽' : '맑음 쪽'} (기준 ${cfg.tLow}%)`;
   $('turbBar').style.width = turbNA ? '0' : Math.max(0, Math.min(100, t)) + '%';
   $('turbBar').style.background = (!turbNA && t > cfg.tLow) ? 'var(--turb)' : 'var(--line-strong)';
+
+  if (r.ntu === undefined) {
+    $('ntuText').textContent = '-';
+    $('ntuSub').textContent = '보드에 새 RAIN.ino를 업로드하면 보여요';
+    $('ntuBar').style.width = '0';
+  } else {
+    const ntuNA = r.ntu === 'NA';
+    const n = parseFloat(r.ntu);
+    $('ntuText').textContent = ntuNA ? '모으는 중' : Math.round(n) + ' NTU';
+    $('ntuSub').textContent = (r.sim || '').includes('T') ? '입력값에서 환산 · 참고값' : '맑은 물 = 1 NTU 기준 · 참고값';
+    $('ntuBar').style.width = ntuNA ? '0' : Math.max(0, Math.min(100, n / 3000 * 100)) + '%';
+    $('ntuBar').style.background = (!turbNA && t > cfg.tLow) ? 'var(--turb)' : 'var(--line-strong)';
+  }
 
   const lvNA = r.level_mm === 'NA';
   const lv = parseInt(r.level_mm, 10);

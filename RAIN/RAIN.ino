@@ -156,6 +156,7 @@ uint8_t turbCount = 0, turbIdx = 0;
 int  rawAdc   = 0;
 float avgAdc  = 0;
 float turbIdxPct = 0;
+float turbNtu = 0;      // DFRobot 환산식으로 구한 대략적인 NTU (참고용)
 bool turbReady = false;
 int  clearAdc = CLEAR_ADC_DEFAULT;
 bool clearFromEeprom = false;
@@ -203,6 +204,18 @@ int readTurbOnce() {
   return (int)(sum / TURB_OVERSAMPLE);
 }
 
+// DFRobot SEN0189 환산식: NTU = -1120.4·V² + 5742.3·V - 4352.9 (2.5~4.2V에서만 유효)
+// 우리 센서는 맑은 물에서 4.2V보다 높게 나와서(ADC 911 ≈ 4.45V) 식을 그대로 쓰면 항상 0이 된다.
+// 그래서 맑은 물 기준값(clearAdc, C로 보정)이 1 NTU(생수 기준)가 되도록 전압을 평행이동한다.
+// 대략적인 참고값이고 판단에는 쓰지 않는다.
+const float NTU_CLEAR_V = 4.19997;    // 이 전압에서 식의 값이 1 NTU
+float ntuFromAdc(float adc) {
+  float v = (adc - clearAdc) * 5.0 / 1024.0 + NTU_CLEAR_V;
+  if (v > NTU_CLEAR_V) v = NTU_CLEAR_V;   // 기준보다 맑게 읽혀도 1 NTU
+  if (v < 2.5) v = 2.5;                   // 2.5V 아래는 식이 맞지 않아 최대값(약 3000)으로 고정
+  return -1120.4 * v * v + 5742.3 * v - 4352.9;
+}
+
 void resetTurb() { turbCount = 0; turbIdx = 0; turbReady = false; }
 
 // 최근 10개 중 최댓값·최솟값을 뺀 평균.
@@ -224,7 +237,12 @@ void addTurbSample() {
   turbIdxPct = (clearAdc - avgAdc) / (float)clearAdc * 100.0;
   turbReady  = (turbCount >= TURB_N);
 
-  if (simTurbOn) { turbIdxPct = simTurb; turbReady = true; }   // 입력값이 있으면 그 값 사용
+  turbNtu = ntuFromAdc(avgAdc);
+
+  if (simTurbOn) {                    // 입력값이 있으면 그 값 사용 (NTU도 같은 지수에 맞춰 환산)
+    turbIdxPct = simTurb; turbReady = true;
+    turbNtu = ntuFromAdc(clearAdc * (1.0 - simTurb / 100.0));
+  }
 }
 
 int readDistanceMm() {
@@ -619,7 +637,10 @@ void logReadable(unsigned long now) {
   Serial.print(F(" (")); Serial.print(servoDeg); Serial.print(F("°)"));
 
   Serial.print(F(" | 탁도 "));
-  if (turbReady) { Serial.print(turbIdxPct, 1); Serial.print('%'); }
+  if (turbReady) {
+    Serial.print(turbIdxPct, 1); Serial.print('%');
+    Serial.print(F(" ≈ ")); Serial.print((int)turbNtu); Serial.print(F(" NTU"));
+  }
   else Serial.print(F("모으는 중"));
   if (simTurbOn) Serial.print(F(" (입력값)"));
   else { Serial.print(F(" (ADC ")); Serial.print((int)avgAdc); Serial.print(')'); }
@@ -646,7 +667,7 @@ void logData(unsigned long now) {
 }
 
 void printCsvHeader() {
-  Serial.println(F("ms,state,test,mem,raw_adc,avg_adc,turb_index,dist_mm,level_mm,open,servo_deg,reason,sim,warn"));
+  Serial.println(F("ms,state,test,mem,raw_adc,avg_adc,turb_index,ntu,dist_mm,level_mm,open,servo_deg,reason,sim,warn"));
 }
 
 void logCsvLine(unsigned long now) {
@@ -657,6 +678,8 @@ void logCsvLine(unsigned long now) {
   Serial.print(rawAdc);                 Serial.print(',');
   Serial.print(avgAdc, 1);              Serial.print(',');
   if (turbReady) Serial.print(turbIdxPct, 1); else Serial.print(F("NA"));
+  Serial.print(',');
+  if (turbReady) Serial.print(turbNtu, 0); else Serial.print(F("NA"));
   Serial.print(',');
   Serial.print(lastDistRaw);            Serial.print(',');
   if (levelOk) Serial.print(levelMm); else Serial.print(F("NA"));
