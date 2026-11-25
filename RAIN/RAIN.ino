@@ -11,10 +11,9 @@
  *   MEASURE : 수위 확보 후 안정화 + 첫 판단. 판 닫힘.
  *   TREAT   : 탁함 → 판 열림, 하부 필터로 처리.
  *   BYPASS  : 맑음 → 판 닫힘, 측면 월류로 우회.
- *   ALARM   : 비상 수위 / 수위센서 이상. 판 닫힘. 수동 해제.
  *   (시험 모드: 시리얼에 treat/bypass 등 상황을 입력하면 그 상태로 고정)
  *
- * 0.1초마다: 센서 읽기 → 경보 판정 → 수위 판정 → 수질 판정 → 서보 출력
+ * 0.1초마다: 센서 읽기 → 수위 판정 → 수질 판정 → 서보 출력
  * 1초마다  : 시리얼 CSV 로그
  */
 
@@ -40,34 +39,28 @@ const unsigned long LOG_MS  = 1000;   // 로그 주기
 // HC-SR04를 챔버 왼쪽 벽 위(스크린 아래)에 아래를 향하게 단다.
 // H_MM은 도면 기준 추정값. 설치 후 "센서 원통 앞면 ~ 차단판 윗면"을 자로 재서 바꾼다.
 // HC-SR04는 약 20~30 mm보다 가까우면 값이 불안정하므로 D_MIN_MM보다 짧으면 버린다.
-// → 잴 수 있는 최고 수위 = H_MM - D_MIN_MM (125 - 25 = 100 mm, 비상 80 mm보다 여유 있음)
+// → 잴 수 있는 수위 = 0 ~ (H_MM - D_MIN_MM) = 0 ~ 100 mm
 const int H_MM     = 125;             // 센서면 ~ 차단판 윗면 높이 (실측 후 수정)
 const int D_MIN_MM = 25;              // 유효 거리 하한 (근거리 불안정 구간)
 const int D_MAX_MM = H_MM + 30;       // 유효 거리 상한 (바닥보다 조금 아래까지 허용)
 
 const int LV_STOP  = 20;              // 이보다 낮으면 측정 중단 → FILL
 const int LV_START = 40;              // 이 이상이 유지되면 측정 시작
-const int LV_ALARM = 80;              // 비상 수위
-const int LV_RESET = 50;              // 경보 해제 가능 수위
 
 const unsigned long LV_START_HOLD_MS = 1000;  // 40 mm 유지 시간 (보고서 0.3 s → 1 s)
-const unsigned long LV_ALARM_HOLD_MS = 300;   // 80 mm 유지 시간 (1회 튐 오경보 방지)
-const unsigned long LV_RESET_HOLD_MS = 3000;  // 해제 전 안전상태 유지 시간
 
-// 경보 사용 여부. 지금은 실험 편의를 위해 끔(false).
-//  - false: 비상 수위는 로그에 '주의'로만 표시. 수위값이 끊기면 판을 닫고 채움에서 기다렸다가
-//           값이 돌아오면 자동으로 이어서 판단 (R 입력 필요 없음)
-//  - true : 비상 수위(80 mm)·수위센서 이상 시 경보 → 판 닫고 멈춤, 시리얼 R로 해제
-const bool USE_ALARM = false;
-const unsigned long LEVEL_TIMEOUT_MS = 1000;  // 정상 거리값이 이만큼 없으면 센서 이상
-const unsigned long BOOT_GRACE_MS    = 2000;  // 전원 투입 직후 센서 이상 판정 유예
+// 수위값이 끊기면 판을 닫고 채움에서 기다렸다가, 값이 돌아오면 자동으로 이어서 판단한다.
+const unsigned long LEVEL_TIMEOUT_MS = 1000;  // 정상 거리값이 이만큼 없으면 수위값 없음
+const unsigned long BOOT_GRACE_MS    = 2000;  // 전원 투입 직후 수위값 없음 판정 유예
 
 const uint8_t LEVEL_MEDIAN_N = 5;             // 수위 중앙값 표본 수
 const unsigned long ECHO_TIMEOUT_US = 12000;  // pulseIn 대기 한도 (약 2 m). 일부 호환품은 응답이 늦게 시작해 여유를 둠.
                                               // 챔버보다 먼 값은 D_MAX_MM에서 걸러짐
 
 // --- 탁도 ---
-const uint8_t  TURB_N          = 10;   // 이동 표본 수 (0.1 s × 10 = 1 s)
+const uint8_t  TURB_N          = 30;   // 이동 표본 수 (0.1 s × 30 = 3 s). 짧으면 맑은 물에서도 값이 튐
+const uint8_t  TURB_TRIM       = 6;    // 평균 낼 때 위·아래에서 각각 버리는 개수 (20%)
+const uint8_t  NTU_DEADBAND    = 2;    // 맑은 물 기준에서 ADC 이 칸수 안쪽은 잡음으로 보고 1 NTU
 const uint8_t  TURB_OVERSAMPLE = 8;    // 한 표본당 analogRead 횟수
 const int      CLEAR_ADC_DEFAULT = 860; // 보정 전 임시값 (반드시 'C'로 보정)
 const unsigned long SETTLE_MS  = 3000; // 측정 시작 후 안정화 시간
@@ -84,15 +77,15 @@ const unsigned long EVENT_GAP_MS = 10UL * 60UL * 1000UL;  // 10분 (시험 시 �
 // --- 서보 ---
 // 조립 후 구멍이 어긋나는 각도/겹치는 각도를 찾아 바꾼다 ('M' 수동 모드 사용).
 // 기구의 끝 멈춤에 닿지 않는 각도로 잡아야 서보가 버티며 과열되지 않는다.
-const int SERVO_CLOSED_DEG = 45;
-const int SERVO_OPEN_DEG   = 135;
+const int SERVO_CLOSED_DEG = 55;
+const int SERVO_OPEN_DEG   = 20;
 const unsigned long SERVO_STEP_MS    = 15;    // 1°씩 움직이는 간격 (충격 완화)
 const unsigned long SERVO_MIN_GAP_MS = 3000;  // 열기 동작 최소 간격 (반복 개폐 보호)
 
 // ============================================================
 // 3. 상태 정의
 // ============================================================
-enum State : uint8_t { ST_FILL, ST_MEASURE, ST_TREAT, ST_BYPASS, ST_ALARM, ST_MANUAL };
+enum State : uint8_t { ST_FILL, ST_MEASURE, ST_TREAT, ST_BYPASS, ST_MANUAL };
 enum Memory : uint8_t { MEM_NONE, MEM_TREAT, MEM_BYPASS };
 
 const char *stateName(State s) {
@@ -101,7 +94,6 @@ const char *stateName(State s) {
     case ST_MEASURE: return "MEASURE";
     case ST_TREAT:   return "TREAT";
     case ST_BYPASS:  return "BYPASS";
-    case ST_ALARM:   return "ALARM";
     default:         return "MANUAL";
   }
 }
@@ -130,7 +122,7 @@ Servo gate;
 State  state = ST_FILL;
 Memory mem   = MEM_NONE;
 unsigned long stateSince = 0;
-const char *reason = "BOOT";        // 마지막 전환 이유 / 경보 원인
+const char *reason = "BOOT";        // 마지막 전환 이유
 bool testMode = false;              // 시험 모드: 센서 판단을 끄고, 입력한 상황으로 고정
 bool logCsv   = false;              // false = 한글로 읽기 쉬운 로그, true = 엑셀용 CSV (L로 전환)
 
@@ -138,7 +130,7 @@ bool logCsv   = false;              // false = 한글로 읽기 쉬운 로그, t
 bool  simTurbOn  = false;  float simTurb  = 0;   // 탁도 지수 %
 bool  simLevelOn = false;  int   simLevel = 0;   // 수위 mm
 
-Hold hLevelStart, hAlarmHigh, hResetSafe, hToTreat, hToBypass;
+Hold hLevelStart, hToTreat, hToBypass;
 
 // 수위
 int  distBuf[LEVEL_MEDIAN_N];
@@ -166,9 +158,6 @@ int  servoDeg = SERVO_CLOSED_DEG, servoTarget = SERVO_CLOSED_DEG;
 bool gateOpen = false;
 unsigned long lastServoStepMs = 0, lastOpenMs = 0;
 bool openedOnce = false;
-
-// 경보 해제 요청 (시리얼 'R')
-bool resetRequested = false;
 
 // 타이머
 unsigned long lastTickMs = 0, lastLogMs = 0;
@@ -216,28 +205,44 @@ float ntuFromAdc(float adc) {
   return -1120.4 * v * v + 5742.3 * v - 4352.9;
 }
 
+// 반대로 NTU → 탁도 지수(%). 위 식을 V에 대해 풀어서(4.2V 쪽 근) 맑은 물 ADC 기준으로 되돌린다.
+float ntuToIndex(float n) {
+  float d = 5742.3 * 5742.3 - 4.0 * 1120.4 * (4352.9 + n);
+  if (d < 0) d = 0;                       // 식의 최대값(약 3008)을 넘으면 꼭짓점으로
+  float v = (5742.3 + sqrt(d)) / (2.0 * 1120.4);
+  float adc = clearAdc + (v - NTU_CLEAR_V) * 1024.0 / 5.0;
+  return (clearAdc - adc) / (float)clearAdc * 100.0;
+}
+
 void resetTurb() { turbCount = 0; turbIdx = 0; turbReady = false; }
 
-// 최근 10개 중 최댓값·최솟값을 뺀 평균.
-// 기포는 한쪽(어둡게 = 탁하게)으로만 튀기 때문에 단순 평균보다 강하다.
+// 최근 3초(30개)를 정렬해서 위·아래 20%씩 버린 평균.
+// 기포는 한쪽(어둡게 = 탁하게)으로 튀고 ADC 잡음은 양쪽으로 튀므로, 둘 다 걸러진다.
 void addTurbSample() {
   rawAdc = readTurbOnce();
   turbBuf[turbIdx] = rawAdc;
   turbIdx = (turbIdx + 1) % TURB_N;
   if (turbCount < TURB_N) turbCount++;
 
-  long sum = 0; int mn = 1023, mx = 0;
-  for (uint8_t i = 0; i < turbCount; i++) {
-    int v = turbBuf[i];
-    sum += v; if (v < mn) mn = v; if (v > mx) mx = v;
+  int tmp[TURB_N];
+  for (uint8_t i = 0; i < turbCount; i++) {          // 삽입 정렬 (30개라 충분히 빠름)
+    int v = turbBuf[i]; int8_t j = i - 1;
+    while (j >= 0 && tmp[j] > v) { tmp[j + 1] = tmp[j]; j--; }
+    tmp[j + 1] = v;
   }
-  if (turbCount >= 3) avgAdc = (float)(sum - mn - mx) / (turbCount - 2);
-  else                avgAdc = (float)sum / turbCount;
+  uint8_t cut = (uint8_t)((uint16_t)turbCount * TURB_TRIM / TURB_N);
+  long sum = 0;
+  for (uint8_t i = cut; i < turbCount - cut; i++) sum += tmp[i];
+  avgAdc = (float)sum / (turbCount - 2 * cut);
 
   turbIdxPct = (clearAdc - avgAdc) / (float)clearAdc * 100.0;
   turbReady  = (turbCount >= TURB_N);
 
-  turbNtu = ntuFromAdc(avgAdc);
+  // 맑은 물 근처는 ADC 1칸이 약 18 NTU라 잡음이 그대로 NTU로 튄다.
+  // 기준에서 NTU_DEADBAND칸 안쪽은 맑은 물로 보고, 그 바깥은 그만큼 당겨서 이어지게 계산.
+  float a = avgAdc + NTU_DEADBAND;
+  if (a > clearAdc) a = clearAdc;
+  turbNtu = ntuFromAdc(a);
 
   if (simTurbOn) {                    // 입력값이 있으면 그 값 사용 (NTU도 같은 지수에 맞춰 환산)
     turbIdxPct = simTurb; turbReady = true;
@@ -290,6 +295,7 @@ void updateLevel(unsigned long now) {
   if (levelOk) {
     distMedian = medianOf(distBuf, distCount);
     levelMm = H_MM - distMedian;
+    if (levelMm < 0) levelMm = 0;             // 차단판보다 아래로 읽히면 0 mm (수위는 0부터 셈)
   }
 }
 
@@ -302,9 +308,6 @@ void logEvent(const char *msg) {
 }
 
 void enterState(State s, const char *why, unsigned long now) {
-  // 경보 관련 타이머는 경보에 들어가거나 나올 때만 초기화
-  // (FILL→MEASURE 같은 일반 전환 때문에 80 mm 유지 시간이 끊기지 않게)
-  if (s == ST_ALARM || state == ST_ALARM) { hAlarmHigh.reset(); hResetSafe.reset(); }
   state = s; reason = why; stateSince = now;
   hLevelStart.reset(); hToTreat.reset(); hToBypass.reset();
 
@@ -318,50 +321,18 @@ void enterState(State s, const char *why, unsigned long now) {
   Serial.print(F(") mem=")); Serial.println(memName(mem));
 }
 
-void enterAlarm(const char *cause, unsigned long now) {
-  enterState(ST_ALARM, cause, now);           // 최초 원인을 reason에 고정
-}
-
 // ============================================================
 // 8. 제어 판단 (0.1초마다)
 // ============================================================
 void controlStep(unsigned long now) {
   if (state == ST_MANUAL || testMode) return;   // 수동·시험 모드에서는 자동 판단 안 함
 
-  // 경보가 아닐 때 들어온 R은 버린다 (나중 경보가 저절로 풀리지 않게)
-  if (state != ST_ALARM) resetRequested = false;
-
-  // ---- (1) 경보: 다른 모든 판단보다 먼저 ----
-  if (!USE_ALARM) {
-    // 경보 끔: 수위값이 없으면 판을 닫고 채움에서 대기. 판단 기억은 유지.
-    if (!levelOk) {
-      bool graceOver = ((long)(now - graceUntil) >= 0);
-      if (graceOver && state != ST_FILL) enterState(ST_FILL, "NO_LEVEL", now);
-      return;
-    }
-  }
-  else if (state != ST_ALARM) {
+  // ---- (1) 수위값이 없으면 판을 닫고 채움에서 대기. 판단 기억은 유지 ----
+  if (!levelOk) {
     bool graceOver = ((long)(now - graceUntil) >= 0);
-    if (graceOver && !levelOk) { enterAlarm("LEVEL_SENSOR", now); return; }
-    if (levelOk && hAlarmHigh.check(levelMm >= LV_ALARM, now, LV_ALARM_HOLD_MS)) {
-      enterAlarm("HIGH_WATER", now); return;
-    }
-  } else {
-    // 안전상태(센서 정상 + 50 mm 이하)가 3초 유지된 뒤에 새로 들어온 R만 인정
-    bool safe = hResetSafe.check(levelOk && levelMm <= LV_RESET, now, LV_RESET_HOLD_MS);
-    if (resetRequested) {
-      resetRequested = false;
-      if (safe) {
-        mem = MEM_NONE;                       // 해제 후엔 처음부터 판단
-        enterState(ST_FILL, "RESET", now);
-      } else {
-        logEvent("RESET_DENIED (need level<=50mm & sensor OK for 3s)");
-      }
-    }
+    if (graceOver && state != ST_FILL) enterState(ST_FILL, "NO_LEVEL", now);
     return;
   }
-
-  if (!levelOk) return;                       // 부팅 유예 중: FILL에서 대기
 
   if (levelMm >= LV_STOP) lastWetMs = now;
   bool low = (levelMm < LV_STOP);
@@ -445,17 +416,16 @@ void printConfig() {
   Serial.println(clearFromEeprom ? F(" (EEPROM)") : F(" (DEFAULT! run 'C')"));
   Serial.print(F("# H_MM=")); Serial.print(H_MM);
   Serial.print(F(" D_valid=")); Serial.print(D_MIN_MM); Serial.print('~'); Serial.println(D_MAX_MM);
-  Serial.print(F("# level stop/start/alarm/reset=")); Serial.print(LV_STOP); Serial.print('/');
-  Serial.print(LV_START); Serial.print('/'); Serial.print(LV_ALARM); Serial.print('/'); Serial.println(LV_RESET);
+  Serial.print(F("# level stop/start=")); Serial.print(LV_STOP); Serial.print('/'); Serial.println(LV_START);
   Serial.print(F("# turb low/high=")); Serial.print(T_LOW); Serial.print('/'); Serial.println(T_HIGH);
   Serial.print(F("# servo closed/open=")); Serial.print(SERVO_CLOSED_DEG); Serial.print('/');
   Serial.println(SERVO_OPEN_DEG);
-  Serial.println(F("# cmds: C=calibrate clear water, R=reset alarm, P=print config,"));
+  Serial.println(F("# cmds: C=calibrate clear water, P=print config,"));
   Serial.println(F("#       M=manual servo mode (then s<deg>, e.g. s100), M again=exit"));
-  Serial.println(F("# test: fill / measure / treat / bypass / alarm (or 채움/측정/처리/우회/경보),"));
+  Serial.println(F("# test: fill / measure / treat / bypass (or 채움/측정/처리/우회),"));
   Serial.println(F("#       auto (or 자동) = back to sensor control"));
   Serial.println(F("# log : L = 읽기 쉬운 로그 <-> 엑셀용 CSV 전환 (csv / txt 로 직접 지정)"));
-  Serial.println(F("# sim : t<탁도%> 예) t30, h<수위mm> 예) h60 → 그 값으로 자동 판단"));
+  Serial.println(F("# sim : t<탁도%> 예) t30, n<NTU> 예) n100, h<수위mm> 예) h60 → 그 값으로 자동 판단"));
   Serial.println(F("#       toff / hoff = 실제 센서로 복귀"));
 }
 
@@ -487,7 +457,6 @@ bool parseTestWord(const char *w, State &s) {
   if (!strcmp_P(w, PSTR("treat"))   || !strcmp_P(w, PSTR("처리"))) { s = ST_TREAT;   return true; }
   if (!strcmp_P(w, PSTR("bypass"))  || !strcmp_P(w, PSTR("우회")) ||
       !strcmp_P(w, PSTR("바이패스")))                               { s = ST_BYPASS;  return true; }
-  if (!strcmp_P(w, PSTR("alarm"))   || !strcmp_P(w, PSTR("경보"))) { s = ST_ALARM;   return true; }
   return false;
 }
 
@@ -521,9 +490,17 @@ void processCommand(char *buf, unsigned long now) {
   if (!strcmp_P(buf, PSTR("csv"))) { logCsv = true; printCsvHeader(); return; }
   if (!strcmp_P(buf, PSTR("txt"))) { logCsv = false; Serial.println(F("# 읽기 쉬운 로그로 전환")); return; }
 
-  // ---- 입력값 모드: t<탁도%>, h<수위mm>, toff, hoff ----
+  // ---- 입력값 모드: t<탁도%>, n<NTU>, h<수위mm>, toff, hoff ----
   char c0 = buf[0];
   bool num = (buf[1] >= '0' && buf[1] <= '9') || buf[1] == '-' || buf[1] == '.';
+  if (c0 == 'n' && num) {                   // n<NTU>: NTU로 넣으면 같은 값이 나오는 탁도 지수로 바꿔서 사용
+    float n = constrain(atof(buf + 1), 1.0, 3000.0);
+    simTurb = ntuToIndex(n); simTurbOn = true;
+    Serial.print(F("# SIM: ntu=")); Serial.print(n, 1);
+    Serial.print(F(" -> turb=")); Serial.print(simTurb, 2); Serial.println('%');
+    if (testMode) { testMode = false; mem = MEM_NONE; enterState(ST_FILL, "SIM", now); }
+    return;
+  }
   if ((c0 == 't' || c0 == 'h') && (num || !strcmp_P(buf + 1, PSTR("off")))) {
     bool on = num;
     if (c0 == 't') {
@@ -531,7 +508,7 @@ void processCommand(char *buf, unsigned long now) {
       if (on) simTurb = constrain(atof(buf + 1), -50.0, 100.0);
       else    resetTurb();                    // 실제 센서 값으로 다시 모음
       Serial.print(F("# SIM: turb="));
-      if (on) { Serial.print(simTurb, 1); Serial.println('%'); } else Serial.println(F("sensor"));
+      if (on) { Serial.print(simTurb, 2); Serial.println('%'); } else Serial.println(F("sensor"));
     } else {
       simLevelOn = on;
       if (on) simLevel = constrain(atoi(buf + 1), 0, H_MM);
@@ -559,7 +536,6 @@ void processCommand(char *buf, unsigned long now) {
     mem = MEM_NONE; testMode = false;
     enterState(ST_FILL, "CAL", t);
   }
-  else if (single && cmd == 'r') resetRequested = true;
   else if (single && cmd == 'p') printConfig();
   else if (single && cmd == 'l') {
     logCsv = !logCsv;
@@ -614,7 +590,6 @@ const __FlashStringHelper *stateKo(State s) {
     case ST_MEASURE: return F("측정");
     case ST_TREAT:   return F("처리");
     case ST_BYPASS:  return F("우회");
-    case ST_ALARM:   return F("경보");
     default:         return F("수동");
   }
 }
@@ -638,8 +613,8 @@ void logReadable(unsigned long now) {
 
   Serial.print(F(" | 탁도 "));
   if (turbReady) {
-    Serial.print(turbIdxPct, 1); Serial.print('%');
-    Serial.print(F(" ≈ ")); Serial.print((int)turbNtu); Serial.print(F(" NTU"));
+    Serial.print(turbIdxPct, 2); Serial.print('%');
+    Serial.print(F(" ≈ ")); Serial.print(turbNtu, 1); Serial.print(F(" NTU"));
   }
   else Serial.print(F("모으는 중"));
   if (simTurbOn) Serial.print(F(" (입력값)"));
@@ -655,7 +630,6 @@ void logReadable(unsigned long now) {
   Serial.print(F(" | 기억: ")); Serial.print(memKo(mem));
   Serial.print(F(" | 이유: ")); Serial.print(reason);
 
-  if (!USE_ALARM && levelOk && levelMm >= LV_ALARM) Serial.print(F(" | 주의: 비상 수위 넘음 (경보 꺼짐)"));
   if (!clearFromEeprom)            Serial.print(F(" | 주의: 맑은물 보정 안 함(C)"));
   if (avgAdc > clearAdc * 1.10)    Serial.print(F(" | 주의: 기준보다 맑게 읽힘"));
   if (turbCount > 0 && avgAdc < 5) Serial.print(F(" | 주의: 탁도센서 0 (선 빠짐?)"));
@@ -677,9 +651,9 @@ void logCsvLine(unsigned long now) {
   Serial.print(memName(mem));           Serial.print(',');
   Serial.print(rawAdc);                 Serial.print(',');
   Serial.print(avgAdc, 1);              Serial.print(',');
-  if (turbReady) Serial.print(turbIdxPct, 1); else Serial.print(F("NA"));
+  if (turbReady) Serial.print(turbIdxPct, 2); else Serial.print(F("NA"));
   Serial.print(',');
-  if (turbReady) Serial.print(turbNtu, 0); else Serial.print(F("NA"));
+  if (turbReady) Serial.print(turbNtu, 1); else Serial.print(F("NA"));
   Serial.print(',');
   Serial.print(lastDistRaw);            Serial.print(',');
   if (levelOk) Serial.print(levelMm); else Serial.print(F("NA"));

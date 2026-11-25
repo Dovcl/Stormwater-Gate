@@ -10,7 +10,7 @@
   --text: #15171a; --muted: #656b74; --focus: #2a6fb5;
   --accent: #2a6fb5;                 /* 수위·물 */
   --turb: #b8661b;                   /* 탁도 */
-  --fill: #656b74; --measure: #2457c5; --treat: #c4511b; --bypass: #13804d; --alarm: #c42b2b; --manual: #6a3fc4;
+  --fill: #656b74; --measure: #2457c5; --treat: #c4511b; --bypass: #13804d; --manual: #6a3fc4;
   --warn: #9a5b00; --danger: #b42318;
   color-scheme: light;
 }
@@ -19,7 +19,7 @@
     --bg: #131416; --surface: #1b1c1f; --line: #2b2d31; --line-strong: #3b3e43; --hover: #232529;
     --text: #ececee; --muted: #9a9ea6; --focus: #6fa8e6;
     --accent: #6fa8e6; --turb: #e39a55;
-    --fill: #9a9ea6; --measure: #7ea2f0; --treat: #f08a55; --bypass: #4cc28a; --alarm: #f07070; --manual: #a98cf2;
+    --fill: #9a9ea6; --measure: #7ea2f0; --treat: #f08a55; --bypass: #4cc28a; --manual: #a98cf2;
     --warn: #e0b057; --danger: #f07070;
     color-scheme: dark;
   }
@@ -78,7 +78,7 @@ button.danger { color: var(--danger); }
 .state-word { font-size: 52px; font-weight: 700; line-height: 1.05; letter-spacing: -0.03em; margin: 6px 0 6px; }
 .s-FILL .state-word { color: var(--fill); } .s-MEASURE .state-word { color: var(--measure); }
 .s-TREAT .state-word { color: var(--treat); } .s-BYPASS .state-word { color: var(--bypass); }
-.s-ALARM .state-word { color: var(--alarm); } .s-MANUAL .state-word { color: var(--manual); }
+.s-MANUAL .state-word { color: var(--manual); }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .tags:empty { display: none; }
 .tag { font-size: 12px; line-height: 20px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--muted); }
@@ -187,7 +187,7 @@ input[type=range] { flex: 1; min-width: 90px; accent-color: var(--text); }
     <div class="cell">
       <h2>수위 · 최근 2분</h2>
       <canvas id="levelChart"></canvas>
-      <div class="legend">점선 20mm 측정 중단 · 40mm 측정 시작 · 80mm 비상 수위</div>
+      <div class="legend"><span id="levelLegend">점선 20mm 측정 중단 · 40mm 측정 시작</span></div>
     </div>
   </section>
 
@@ -214,12 +214,22 @@ input[type=range] { flex: 1; min-width: 90px; accent-color: var(--text); }
       <h2>센서 값 직접 넣기</h2>
       <div class="row">
         <label for="turbIn">탁도 %</label>
-        <input type="number" id="turbIn" step="0.5" min="-50" max="100" value="30">
+        <input type="number" id="turbIn" step="any" min="-50" max="100" value="30">
         <button id="turbApply">적용</button>
         <span class="presets">
           <button class="quiet" data-turb="5">5%</button>
           <button class="quiet" data-turb="30">30%</button>
           <button class="quiet" id="turbOff">실제 센서</button>
+        </span>
+      </div>
+      <div class="row">
+        <label for="ntuIn">탁도 NTU</label>
+        <input type="number" id="ntuIn" step="any" min="1" max="3000" value="100">
+        <button id="ntuApply">적용</button>
+        <span class="presets">
+          <button class="quiet" data-ntu="10">10</button>
+          <button class="quiet" data-ntu="500">500</button>
+          <button class="quiet" id="ntuOff">실제 센서</button>
         </span>
       </div>
       <div class="row">
@@ -232,7 +242,7 @@ input[type=range] { flex: 1; min-width: 90px; accent-color: var(--text); }
           <button class="quiet" id="levelOff">실제 센서</button>
         </span>
       </div>
-      <p class="hint">넣은 값으로 아두이노가 실제처럼 판단해요. 수위 60, 탁도 30이면 약 6초 뒤 <b>처리</b>, 이어서 탁도 5면 5초 뒤 <b>우회</b>.</p>
+      <p class="hint">탁도는 % 또는 NTU 중 하나로 넣으면 돼요(NTU는 같은 탁도 지수로 바꿔서 판단). 넣은 값으로 아두이노가 실제처럼 판단해요. 수위 60, 탁도 30이면 약 6초 뒤 <b>처리</b>, 이어서 탁도 5면 5초 뒤 <b>우회</b>.</p>
     </div>
 
     <div class="cell">
@@ -268,7 +278,6 @@ const ST = {
   MEASURE: ['측정', '물이 찼어요 · 탁도를 판단하는 중'],
   TREAT:   ['처리', '탁한 물 → 판 열고 아래 필터로'],
   BYPASS:  ['우회', '맑은 물 → 판 닫고 옆으로 넘김'],
-  ALARM:   ['경보', '비상 · 판 닫힘'],
   MANUAL:  ['수동', '서보 각도를 직접 움직이는 중'],
 };
 const MEM = { NONE: '없음', TREAT: '처리', BYPASS: '우회' };
@@ -276,9 +285,8 @@ const REASON = {
   BOOT: '전원 켜짐', LEVEL_UP: '수위 40mm 이상', LEVEL_LOW: '수위 20mm 미만', TURB_HIGH: '탁도 높음',
   TURB_LOW: '탁도 낮음', RESUME: '직전이 우회라 우회로 복귀', TEST: '직접 고름', TEST_EXIT: '자동으로 돌아감',
   NO_LEVEL: '수위값 없음', SIM: '입력값 사용 시작', CAL: '보정 끝', MANUAL: '수동 모드', MANUAL_EXIT: '수동 모드 끝',
-  RESET: '경보 해제', HIGH_WATER: '비상 수위', LEVEL_SENSOR: '수위센서 이상',
 };
-const cfg = { tLow: 15, tHigh: 25, lvStop: 20, lvStart: 40, lvAlarm: 80, H: 125 };
+const cfg = { tLow: 15, tHigh: 25, lvStop: 20, lvStart: 40, H: 125 };
 
 let port = null, reader = null, writer = null, header = null, last = null;
 let rows = [], csvHeaderLine = '';
@@ -402,8 +410,9 @@ function handleLine(line) {
 function parseConfig(line) {
   let m;
   if ((m = line.match(/turb low\/high=([\d.]+)\/([\d.]+)/))) { cfg.tLow = +m[1]; cfg.tHigh = +m[2]; }
-  if ((m = line.match(/level stop\/start\/alarm\/reset=(\d+)\/(\d+)\/(\d+)/))) {
-    cfg.lvStop = +m[1]; cfg.lvStart = +m[2]; cfg.lvAlarm = +m[3];
+  if ((m = line.match(/level stop\/start(?:\/alarm\/reset)?=(\d+)\/(\d+)/))) {
+    cfg.lvStop = +m[1]; cfg.lvStart = +m[2];
+    $('levelLegend').textContent = `점선 ${cfg.lvStop}mm 측정 중단 · ${cfg.lvStart}mm 측정 시작`;
   }
   if ((m = line.match(/H_MM=(\d+)/))) cfg.H = +m[1];
   if ((m = line.match(/servo closed\/open=(\d+)\/(\d+)/))) {
@@ -443,7 +452,7 @@ function update(r) {
 
   const turbNA = r.turb_index === 'NA';
   const t = parseFloat(r.turb_index);
-  $('turbText').textContent = turbNA ? '모으는 중' : t.toFixed(1) + '%';
+  $('turbText').textContent = turbNA ? '모으는 중' : t.toFixed(2) + '%';
   $('turbText').style.color = (!turbNA && t > cfg.tLow) ? 'var(--turb)' : '';
   $('turbSub').textContent = (r.sim || '').includes('T') ? '입력값' :
     `센서 ADC ${Math.round(parseFloat(r.avg_adc))} · ${(!turbNA && t > cfg.tLow) ? '탁함 쪽' : '맑음 쪽'} (기준 ${cfg.tLow}%)`;
@@ -457,7 +466,7 @@ function update(r) {
   } else {
     const ntuNA = r.ntu === 'NA';
     const n = parseFloat(r.ntu);
-    $('ntuText').textContent = ntuNA ? '모으는 중' : Math.round(n) + ' NTU';
+    $('ntuText').textContent = ntuNA ? '모으는 중' : (n < 100 ? n.toFixed(1) : Math.round(n)) + ' NTU';
     $('ntuSub').textContent = (r.sim || '').includes('T') ? '입력값에서 환산 · 참고값' : '맑은 물 = 1 NTU 기준 · 참고값';
     $('ntuBar').style.width = ntuNA ? '0' : Math.max(0, Math.min(100, n / 3000 * 100)) + '%';
     $('ntuBar').style.background = (!turbNA && t > cfg.tLow) ? 'var(--turb)' : 'var(--line-strong)';
@@ -470,7 +479,6 @@ function update(r) {
   $('levelSub').textContent = (r.sim || '').includes('L') ? '입력값' :
     (dist < 0 ? '초음파 센서 응답 없음' : `센서까지 거리 ${dist} mm`);
   $('levelBar').style.width = lvNA ? '0' : Math.max(0, Math.min(100, lv / cfg.H * 100)) + '%';
-  $('levelBar').style.background = (!lvNA && lv >= cfg.lvAlarm) ? 'var(--alarm)' : 'var(--accent)';
 
   $('nextText').textContent = nextHint(st, r.test === '1', lvNA ? null : lv);
 
@@ -541,7 +549,7 @@ function drawChart(canvas, data, max, lines, color) {
 function drawCharts() {
   const css = getComputedStyle(document.documentElement);
   drawChart($('turbChart'), hist.turb, 100, [cfg.tLow, cfg.tHigh], css.getPropertyValue('--turb').trim());
-  drawChart($('levelChart'), hist.level, cfg.H, [cfg.lvStop, cfg.lvStart, cfg.lvAlarm], css.getPropertyValue('--accent').trim());
+  drawChart($('levelChart'), hist.level, cfg.H, [cfg.lvStop, cfg.lvStart], css.getPropertyValue('--accent').trim());
 }
 window.addEventListener('resize', drawCharts);
 drawCharts(); drawPlate(false);
@@ -567,6 +575,10 @@ function applyTurb(v) {
   if (v === '' || isNaN(+v)) { addEvent('탁도 값을 숫자로 넣어 주세요'); return; }
   $('turbIn').value = v; send('t' + (+v));
 }
+function applyNtu(v) {
+  if (v === '' || isNaN(+v)) { addEvent('NTU 값을 숫자로 넣어 주세요'); return; }
+  $('ntuIn').value = v; send('n' + (+v));
+}
 function applyLevel(v) {
   if (v === '' || isNaN(+v)) { addEvent('수위 값을 숫자로 넣어 주세요'); return; }
   $('levelIn').value = v; send('h' + Math.round(+v));
@@ -576,6 +588,10 @@ $('levelApply').onclick = () => applyLevel($('levelIn').value);
 $('turbIn').onkeydown = e => { if (e.key === 'Enter') applyTurb($('turbIn').value); };
 $('levelIn').onkeydown = e => { if (e.key === 'Enter') applyLevel($('levelIn').value); };
 $('turbOff').onclick = () => send('toff');
+$('ntuOff').onclick = () => send('toff');
+$('ntuApply').onclick = () => applyNtu($('ntuIn').value);
+$('ntuIn').onkeydown = e => { if (e.key === 'Enter') applyNtu($('ntuIn').value); };
+document.querySelectorAll('[data-ntu]').forEach(b => b.onclick = () => applyNtu(b.dataset.ntu));
 $('levelOff').onclick = () => send('hoff');
 document.querySelectorAll('[data-turb]').forEach(b => b.onclick = () => applyTurb(b.dataset.turb));
 document.querySelectorAll('[data-level]').forEach(b => b.onclick = () => applyLevel(b.dataset.level));
